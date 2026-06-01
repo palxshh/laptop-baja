@@ -256,22 +256,46 @@
       z-index: 200; pointer-events: none; display: none; }
     #cel.go { display: block; animation: cel 1.6s ease forwards; }
 
-    /* ── MOTION OVERLAY ─────────────────────────────────────── */
-    #motionbox {
-      display: none; position: fixed; inset: 0; z-index: 150;
-      background: rgba(0,0,0,.78); align-items: center; justify-content: center;
+    /* ── SPLASH SCREEN ──────────────────────────────────────── */
+    #splash {
+      position: fixed; inset: 0; z-index: 200;
+      background: linear-gradient(160deg, #0e0704 0%, #1e0d05 50%, #0a0300 100%);
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity .5s, transform .5s;
     }
-    #motionbox.show { display: flex; }
-    #motioncard { background: var(--wood-mid); border: 2px solid var(--gold);
-      border-radius: 12px; padding: 28px 24px; text-align: center; max-width: 300px; }
-    #motioncard h3 { color: var(--gold-bright); margin-bottom: 8px; font-size: 1rem; }
-    #motioncard p { color: rgba(255,255,255,.65); font-size: .82rem;
-      line-height: 1.55; margin-bottom: 18px; }
-    #btn-motion { background: rgba(184,134,11,.3); border: 1px solid var(--gold);
-      color: var(--gold-bright); padding: 9px 22px; border-radius: 20px;
-      cursor: pointer; font-family: inherit; font-size: .88rem; margin-right: 10px; }
-    #btn-skip  { background: none; border: none; color: rgba(255,255,255,.35);
-      cursor: pointer; font-size: .78rem; font-family: inherit; }
+    #splash.hide { opacity: 0; pointer-events: none; }
+    #splash-card {
+      text-align: center; padding: 40px 36px; max-width: 420px;
+      border: 1px solid rgba(184,134,11,.3); border-radius: 16px;
+      background: rgba(44,24,16,.6); backdrop-filter: blur(8px);
+    }
+    #splash-card h1 {
+      font-family: 'Noto Serif Devanagari', serif;
+      font-size: 2rem; color: var(--gold-bright);
+      letter-spacing: 4px; margin-bottom: 6px;
+    }
+    #splash-tag { color: rgba(218,165,32,.8); font-size: .95rem;
+      margin-bottom: 28px; font-style: italic; }
+    .s-steps { display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; }
+    .s-step {
+      display: flex; align-items: center; gap: 14px;
+      background: rgba(184,134,11,.08); border: 1px solid rgba(184,134,11,.2);
+      border-radius: 10px; padding: 11px 16px; text-align: left;
+    }
+    .s-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .s-text strong { display: block; color: var(--gold-light); font-size: .85rem; }
+    .s-text span   { color: rgba(255,255,255,.45); font-size: .72rem; }
+    #btn-start {
+      background: linear-gradient(135deg, rgba(184,134,11,.4), rgba(218,165,32,.3));
+      border: 1px solid var(--gold-light); color: var(--gold-bright);
+      font-family: inherit; font-size: .95rem; font-weight: 600;
+      padding: 13px 36px; border-radius: 30px; cursor: pointer;
+      letter-spacing: 1px; transition: all .2s; width: 100%;
+    }
+    #btn-start:hover { background: linear-gradient(135deg, rgba(184,134,11,.6), rgba(218,165,32,.5)); }
+
+    /* ── BODY GLOW (driven by lid angle) ────────────────────── */
+    #body { transition: box-shadow .12s; }
   </style>
 </head>
 <body>
@@ -304,7 +328,7 @@
     <div class="grille"></div>
 
     <div id="bellows-row">
-      <span id="bellows-lbl">Bellows</span>
+      <span id="bellows-lbl">Screen angle</span>
       <div id="bellows-track"><div id="bellows-fill"></div></div>
       <span id="bellows-pct">70%</span>
     </div>
@@ -322,13 +346,35 @@
   <!-- Celebration -->
   <div id="cel">🎉</div>
 
-  <!-- Motion permission prompt (iOS) -->
-  <div id="motionbox">
-    <div id="motioncard">
-      <h3>🎵 Enable Lid Control</h3>
-      <p>Tilt your laptop screen open and closed to work the harmonium bellows — just like a real one!</p>
-      <button id="btn-motion">Enable Motion</button>
-      <button id="btn-skip">Skip</button>
+  <!-- Splash / intro screen -->
+  <div id="splash">
+    <div id="splash-card">
+      <h1>हारमोनियम</h1>
+      <p id="splash-tag">Your laptop is a harmonium.</p>
+      <div class="s-steps">
+        <div class="s-step">
+          <span class="s-icon">⌨️</span>
+          <div class="s-text">
+            <strong>Keyboard plays the notes</strong>
+            <span>H J K L ; ' \ ] → Sa Re Ga Ma Pa Dha Ni Sa</span>
+          </div>
+        </div>
+        <div class="s-step">
+          <span class="s-icon">💻</span>
+          <div class="s-text">
+            <strong>Screen lid breathes the music</strong>
+            <span>Open or close the screen to change the tone &amp; expression</span>
+          </div>
+        </div>
+        <div class="s-step">
+          <span class="s-icon">📖</span>
+          <div class="s-text">
+            <strong>Guided lessons included</strong>
+            <span>Scales, ragas, Vande Mataram &amp; more</span>
+          </div>
+        </div>
+      </div>
+      <button id="btn-start">Start Playing →</button>
     </div>
   </div>
 
@@ -526,6 +572,20 @@ function setBellows(level, vel = 0) {
   const pct = Math.round(bellows * 100);
   document.getElementById('bellows-fill').style.width = pct + '%';
   document.getElementById('bellows-pct').textContent  = pct + '%';
+
+  // Dramatic visual: amber glow blooms across the whole body with angle
+  const glowSize = Math.round(20 + bellows * 120);
+  const glowAlpha = (0.05 + bellows * 0.55).toFixed(2);
+  const glowAlpha2 = (bellows * 0.25).toFixed(2);
+  document.getElementById('body').style.boxShadow =
+    `inset 0 0 ${glowSize}px rgba(255,160,40,${glowAlpha}),` +
+    `inset 0 0 ${Math.round(glowSize * 0.4)}px rgba(255,220,80,${glowAlpha2})`;
+
+  // Note bubbles scale up slightly when open — makes them pop on camera
+  const scale = (0.92 + bellows * 0.16).toFixed(3);
+  document.querySelectorAll('.nbubble').forEach(b => {
+    b.style.transform = `scale(${scale})`;
+  });
 }
 
 // ── KEYBOARD RENDERING ────────────────────────────────────────────────────────
@@ -663,6 +723,7 @@ document.addEventListener('keydown', e => {
   const map = useLeft ? L_MAP : R_MAP;
   const id  = map[e.key] ?? map[e.key.toLowerCase()];
   if (!id || heldKeys.has(e.key)) return;
+  e.preventDefault(); // stop browser shortcuts (Firefox quick-find on ', etc.)
   heldKeys.add(e.key);
   noteOn(id);
 });
@@ -677,10 +738,11 @@ document.addEventListener('keyup', e => {
 // ── DEVICE ORIENTATION (LID ANGLE) ───────────────────────────────────────────
 function onOrientation(e) {
   const b = e.beta; if (b === null) return;
-  // beta ≈ 0 when screen horizontal face-up; ~90 when vertical
-  // We treat ~20° as closed, ~120° as fully open
-  const level = Math.max(0, Math.min(1, (b - 15) / 105));
-  const vel   = prevBeta !== null ? Math.abs(b - prevBeta) * 4 : 0;
+  // Tight range: 45°–95° → 0–1  (only 50° total = very sensitive, great for reel)
+  // Smoothstep curve: small angle changes register strongly in the middle range
+  const raw = Math.max(0, Math.min(1, (b - 45) / 50));
+  const level = raw * raw * (3 - 2 * raw); // smoothstep
+  const vel   = prevBeta !== null ? Math.abs(b - prevBeta) * 6 : 0;
   prevBeta = b;
   setBellows(level, vel);
 }
@@ -839,20 +901,31 @@ function stopLesson() {
 
 window.startLesson = startLesson;
 
-// ── INIT ──────────────────────────────────────────────────────────────────────
+// ── SPLASH / INIT ─────────────────────────────────────────────────────────────
+function dismissSplash() {
+  const splash = document.getElementById('splash');
+  splash.classList.add('hide');
+  setTimeout(() => splash.remove(), 500);
+
+  // First interaction: init audio + try motion
+  initAudio();
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // iOS needs explicit permission tap — reuse this interaction
+    DeviceOrientationEvent.requestPermission()
+      .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', onOrientation); })
+      .catch(() => {});
+  } else {
+    tryMotion();
+  }
+}
+
+document.getElementById('btn-start').addEventListener('click', dismissSplash);
+
 function init() {
   renderKB();
   renderLessons();
   setBellows(0.7);
-
-  // Motion availability check
-  if (typeof DeviceOrientationEvent !== 'undefined' &&
-      typeof DeviceOrientationEvent.requestPermission === 'function') {
-    document.getElementById('motionbox').classList.add('show');
-  } else {
-    // Auto-try (Chrome desktop, Firefox, etc.)
-    tryMotion();
-  }
 }
 
 init();
