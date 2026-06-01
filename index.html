@@ -301,6 +301,17 @@
 
     /* ── BODY GLOW (driven by lid angle) ────────────────────── */
     #body { transition: box-shadow .12s; }
+
+    /* ── PUMP HINT TOOLTIP ──────────────────────────────────── */
+    #pump-hint {
+      position: fixed; bottom: calc(40vh + 18px); left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10,5,2,.88); border: 1px solid rgba(255,179,71,.45);
+      color: rgba(255,200,80,.92); font-size: .75rem; padding: 8px 18px;
+      border-radius: 20px; pointer-events: none; z-index: 55;
+      white-space: nowrap; opacity: 0; transition: opacity .3s;
+    }
+    #pump-hint.show { opacity: 1; }
   </style>
 </head>
 <body>
@@ -319,6 +330,7 @@
       <span id="brand">हारमोनियम</span>
       <div id="controls">
         <button class="cbtn" id="btn-flip">⇄ Flip</button>
+        <button class="cbtn" id="btn-hold">Hold 🔓</button>
         <button class="cbtn" id="btn-nota">सा ↔ C</button>
         <button class="cbtn" id="btn-lessons">♪ Lessons</button>
       </div>
@@ -348,6 +360,9 @@
     <h2><span>♪ Lessons</span><button id="lclose">✕</button></h2>
     <div id="llist"></div>
   </div>
+
+  <!-- Pump hint tooltip -->
+  <div id="pump-hint">Lid still? Pump it to keep air — or press Hold 🔒</div>
 
   <!-- Celebration -->
   <div id="cel">🎉</div>
@@ -468,15 +483,19 @@ const LESSONS = [
 ];
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let useWestern = false;
-let useLeft    = false;
-let bellows    = 0.7;
-let prevBeta   = null;
+let useWestern    = false;
+let useLeft       = false;
+let bellows       = 0.5;   // starts at 50%, decays unless you pump
+let prevBeta      = null;
+let holdMode      = false; // when true, no decay
+let sliderDragging = false;
+let lastTick      = null;
+let hintShown     = !!localStorage.getItem('pumpHint');
 
-const playing = {};           // noteId → { oscs, gainNode }
-const heldKeys = new Set();   // currently depressed keyboard keys
+const playing  = {};           // noteId → { oscs, gainNode }
+const heldKeys = new Set();    // currently depressed keyboard keys
 
-let lessonMode = null;        // null | 'demo' | 'practice'
+let lessonMode = null;         // null | 'demo' | 'practice'
 let lessonData = null;
 let lessonStep = 0;
 let demoTimer  = null;
@@ -575,30 +594,47 @@ function stopAll() { Object.keys(playing).forEach(stopNote); }
 
 function setBellows(level, vel = 0) {
   bellows = Math.max(0, Math.min(1, level));
+
   if (ctx) {
     const t = ctx.currentTime;
-    masterGain.gain.setTargetAtTime(bellows * 0.75, t, 0.06);
-    bwFilter.frequency.setTargetAtTime(800 + bellows * 2200, t, 0.06);
+
+    // ── Pressure thresholds → audio character ──────────────────
+    let targetGain, targetFilter;
+    if (bellows < 0.08) {
+      targetGain   = 0;
+      targetFilter = 400;
+    } else if (bellows < 0.40) {
+      const z = (bellows - 0.08) / 0.32;       // 0→1 inside breathy zone
+      targetGain   = z * 0.35;                  // soft
+      targetFilter = 400 + z * 700;             // 400→1100 Hz (muffled)
+    } else {
+      const z = (bellows - 0.40) / 0.60;        // 0→1 inside full zone
+      targetGain   = 0.35 + z * 0.42;           // 0.35→0.77
+      targetFilter = 1100 + z * 2100;           // 1100→3200 Hz (bright)
+    }
+
+    masterGain.gain.setTargetAtTime(targetGain, t, 0.06);
+    bwFilter.frequency.setTargetAtTime(targetFilter, t, 0.06);
     lfoOsc.frequency.setTargetAtTime(Math.min(2 + vel * 0.35, 9), t, 0.08);
     lfoAmt.gain.setTargetAtTime(Math.min(vel * 0.012, 0.05), t, 0.08);
   }
+
+  // ── Visuals ────────────────────────────────────────────────────
   const pct = Math.round(bellows * 100);
   document.getElementById('bellows-fill').style.width = pct + '%';
   document.getElementById('bellows-pct').textContent  = pct + '%';
 
-  // Dramatic visual: amber glow blooms across the whole body with angle
-  const glowSize = Math.round(20 + bellows * 120);
-  const glowAlpha = (0.05 + bellows * 0.55).toFixed(2);
-  const glowAlpha2 = (bellows * 0.25).toFixed(2);
+  // Body glow: blooms from almost-dark → bright amber as pressure rises
+  const gs  = Math.round(20 + bellows * 130);
+  const ga  = (0.04 + bellows * 0.58).toFixed(2);
+  const ga2 = (bellows * 0.28).toFixed(2);
   document.getElementById('body').style.boxShadow =
-    `inset 0 0 ${glowSize}px rgba(255,160,40,${glowAlpha}),` +
-    `inset 0 0 ${Math.round(glowSize * 0.4)}px rgba(255,220,80,${glowAlpha2})`;
+    `inset 0 0 ${gs}px rgba(255,155,35,${ga}),` +
+    `inset 0 0 ${Math.round(gs * 0.38)}px rgba(255,225,70,${ga2})`;
 
-  // Note bubbles scale up slightly when open — makes them pop on camera
-  const scale = (0.92 + bellows * 0.16).toFixed(3);
-  document.querySelectorAll('.nbubble').forEach(b => {
-    b.style.transform = `scale(${scale})`;
-  });
+  // Note bubbles scale with pressure
+  const sc = (0.92 + bellows * 0.16).toFixed(3);
+  document.querySelectorAll('.nbubble').forEach(b => { b.style.transform = `scale(${sc})`; });
 }
 
 // ── KEYBOARD RENDERING ────────────────────────────────────────────────────────
@@ -751,13 +787,17 @@ document.addEventListener('keyup', e => {
 // ── DEVICE ORIENTATION (LID ANGLE) ───────────────────────────────────────────
 function onOrientation(e) {
   const b = e.beta; if (b === null) return;
-  // Tight range: 45°–95° → 0–1  (only 50° total = very sensitive, great for reel)
-  // Smoothstep curve: small angle changes register strongly in the middle range
-  const raw = Math.max(0, Math.min(1, (b - 45) / 50));
-  const level = raw * raw * (3 - 2 * raw); // smoothstep
-  const vel   = prevBeta !== null ? Math.abs(b - prevBeta) * 6 : 0;
+  const delta = prevBeta !== null ? Math.abs(b - prevBeta) : 0;
   prevBeta = b;
-  setBellows(level, vel);
+  if (holdMode) return;
+  // Pumping: lid movement adds pressure (position no longer matters, only motion)
+  const pump = delta * 0.018; // tuned: normal pumping fills 0→100% in ~3-4 swings
+  if (pump > 0.001) {
+    setBellows(Math.min(1, bellows + pump), delta * 4);
+    // Dismiss hint if user starts pumping
+    const hint = document.getElementById('pump-hint');
+    if (hint) hint.classList.remove('show');
+  }
 }
 
 function tryMotion() {
@@ -780,12 +820,12 @@ function tryMotion() {
     const x = (e.clientX ?? e.touches?.[0]?.clientX) ?? 0;
     return Math.max(0, Math.min(1, (x - r.left) / r.width));
   };
-  track.addEventListener('mousedown', e => { drag = true; setBellows(getL(e)); });
+  track.addEventListener('mousedown', e => { drag = true; sliderDragging = true; setBellows(getL(e)); });
   document.addEventListener('mousemove', e => { if (drag) setBellows(getL(e), 6); });
-  document.addEventListener('mouseup', () => { drag = false; });
-  track.addEventListener('touchstart', e => { drag = true; setBellows(getL(e)); }, { passive: true });
+  document.addEventListener('mouseup', () => { drag = false; sliderDragging = false; });
+  track.addEventListener('touchstart', e => { drag = true; sliderDragging = true; setBellows(getL(e)); }, { passive: true });
   document.addEventListener('touchmove', e => { if (drag) setBellows(getL(e), 4); });
-  document.addEventListener('touchend', () => { drag = false; });
+  document.addEventListener('touchend', () => { drag = false; sliderDragging = false; });
 })();
 
 // ── UI BUTTONS ────────────────────────────────────────────────────────────────
@@ -795,6 +835,13 @@ document.getElementById('btn-flip').addEventListener('click', () => {
   document.getElementById('btn-flip').classList.toggle('on', useLeft);
   document.getElementById('btn-flip').textContent = useLeft ? '⇄ Right' : '⇄ Flip';
   renderKB();
+});
+
+document.getElementById('btn-hold').addEventListener('click', () => {
+  holdMode = !holdMode;
+  const btn = document.getElementById('btn-hold');
+  btn.textContent = holdMode ? 'Holding 🔒' : 'Hold 🔓';
+  btn.classList.toggle('on', holdMode);
 });
 
 document.getElementById('btn-nota').addEventListener('click', () => {
@@ -919,59 +966,92 @@ function resizeCanvas() {
   canvas.height = rect.height * dpr;
 }
 
-function drawPath(c2d, pts, W, H) {
-  c2d.beginPath();
-  pts.forEach(([x, y], i) => i === 0 ? c2d.moveTo(x, y) : c2d.lineTo(x, y));
-  c2d.stroke();
-}
-
-function drawWave() {
-  requestAnimationFrame(drawWave);
+function drawWaveFrame() {
   const canvas = document.getElementById('wave');
-  if (!canvas) return;
+  if (!canvas || !canvas.width || !canvas.height) return;
   const c2d = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
   const dpr = window.devicePixelRatio || 1;
   const hasNotes = Object.keys(playing).length > 0;
 
   c2d.clearRect(0, 0, W, H);
+  if (bellows < 0.02) return; // nothing to show at near-zero pressure
 
-  // Build point array
   const pts = [];
+
   if (analyser && hasNotes) {
-    // Real audio waveform from AnalyserNode
+    // ── Real audio waveform, amplitude scaled by bellows ────────
     analyser.getByteTimeDomainData(waveBuffer);
     const step = Math.max(1, Math.floor(waveBuffer.length / W));
     for (let x = 0; x < W; x++) {
-      const v = (waveBuffer[x * step] / 128.0) - 1.0; // -1 to +1
-      pts.push([x, H / 2 + v * H * 0.42]);
+      const raw = (waveBuffer[Math.min(x * step, waveBuffer.length - 1)] / 128.0) - 1.0;
+      pts.push([x, H / 2 + raw * H * 0.42 * bellows]); // grows/shrinks with lid
     }
   } else {
-    // Animated sine — amplitude tied to bellows so it reacts to lid movement
-    const t   = Date.now() / 900;
-    const amp = bellows * H * 0.38;
-    const freq = 1.8 + bellows * 2.5;
+    // ── Harmonic morphing: more harmonics appear as pressure rises ─
+    const t2     = Date.now() / 1000;
+    const numH   = Math.max(1, Math.round(bellows * 5)); // 1 harmonic at 20% → 5 at 100%
+    const baseF  = 1.4 + bellows * 2.2;                  // faster with more pressure
+
     for (let x = 0; x <= W; x++) {
-      const y = H / 2 + amp * Math.sin(freq * Math.PI * 2 * (x / W) + t);
-      pts.push([x, y]);
+      let y = 0;
+      for (let h = 1; h <= numH; h++) {
+        const amp   = (bellows * H * 0.36) / h;          // each harmonic quieter
+        const phase = t2 * (0.7 + h * 0.5);              // each moves independently
+        y += amp * Math.sin(h * baseF * 2 * Math.PI * (x / W) + phase);
+      }
+      pts.push([x, H / 2 + y]);
     }
   }
 
-  // Glow pass (thick, transparent)
-  const alpha = 0.18 + bellows * 0.55;
-  c2d.lineWidth  = 8 * dpr;
-  c2d.strokeStyle = `rgba(255,170,40,${(alpha * 0.35).toFixed(2)})`;
+  // ── Color shifts from dim amber → bright gold with pressure ──
+  const r = Math.round(180 + bellows * 75);
+  const g = Math.round(75  + bellows * 165);
+  const b2 = 20;
+  const alpha = 0.18 + bellows * 0.72;
+
+  // Glow halo (thick, soft)
+  c2d.lineWidth   = 8 * dpr;
+  c2d.strokeStyle = `rgba(${r},${g},${b2},${(alpha * 0.28).toFixed(2)})`;
   c2d.shadowBlur  = 0;
-  drawPath(c2d, pts, W, H);
+  c2d.beginPath();
+  pts.forEach(([x, y], i) => i === 0 ? c2d.moveTo(x, y) : c2d.lineTo(x, y));
+  c2d.stroke();
 
-  // Core line (sharp, bright)
+  // Core line (sharp)
   c2d.lineWidth   = 2 * dpr;
-  c2d.strokeStyle = `rgba(255,200,80,${alpha.toFixed(2)})`;
-  c2d.shadowBlur  = (10 + bellows * 30) * dpr;
-  c2d.shadowColor = 'rgba(255,150,20,0.9)';
-  drawPath(c2d, pts, W, H);
+  c2d.strokeStyle = `rgba(${r},${g},${b2},${alpha.toFixed(2)})`;
+  c2d.shadowBlur  = (8 + bellows * 38) * dpr;
+  c2d.shadowColor = 'rgba(255,140,20,0.9)';
+  c2d.beginPath();
+  pts.forEach(([x, y], i) => i === 0 ? c2d.moveTo(x, y) : c2d.lineTo(x, y));
+  c2d.stroke();
+  c2d.shadowBlur = 0;
+}
 
-  c2d.shadowBlur = 0; // reset so it doesn't bleed elsewhere
+// ── UNIFIED TICK LOOP (decay + waveform + hint) ───────────────────────────────
+function tick(ts) {
+  requestAnimationFrame(tick);
+
+  // Pressure decay: ~15%/sec when not pumping, not held, not sliding
+  if (!holdMode && !sliderDragging && bellows > 0) {
+    const dt = lastTick ? Math.min((ts - lastTick) / 1000, 0.1) : 0;
+    if (dt > 0) setBellows(Math.max(0, bellows - 0.15 * dt));
+  }
+  lastTick = ts;
+
+  // Hint: show once if a key is held but pressure is low and hold is off
+  if (!hintShown && !holdMode && heldKeys.size > 0 && bellows < 0.20) {
+    hintShown = true;
+    localStorage.setItem('pumpHint', '1');
+    const hint = document.getElementById('pump-hint');
+    if (hint) {
+      hint.classList.add('show');
+      setTimeout(() => hint.classList.remove('show'), 4000);
+    }
+  }
+
+  drawWaveFrame();
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -1000,9 +1080,9 @@ document.getElementById('btn-start').addEventListener('click', dismissSplash);
 function init() {
   renderKB();
   renderLessons();
-  setBellows(0.7);
+  setBellows(0.5);
   resizeCanvas();
-  drawWave(); // start the animation loop
+  requestAnimationFrame(tick); // unified loop: decay + waveform
 }
 
 init();
