@@ -1066,13 +1066,26 @@ function dismissSplash() {
   initAudio();
   if (typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function') {
-    // iOS needs explicit permission tap — reuse this interaction
     DeviceOrientationEvent.requestPermission()
       .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', onOrientation); })
       .catch(() => {});
   } else {
     tryMotion();
   }
+
+  // If no lid sensor fires within 2.5s, auto-enable Hold so the app works normally
+  let sensorDetected = false;
+  const sensorCheck = () => { sensorDetected = true; };
+  window.addEventListener('deviceorientation', sensorCheck, { once: true });
+  setTimeout(() => {
+    window.removeEventListener('deviceorientation', sensorCheck);
+    if (!sensorDetected && !holdMode) {
+      holdMode = true;
+      setBellows(0.75); // restore full pressure
+      const btn = document.getElementById('btn-hold');
+      if (btn) { btn.textContent = 'Holding 🔒'; btn.classList.add('on'); }
+    }
+  }, 2500);
 }
 
 document.getElementById('btn-start').addEventListener('click', dismissSplash);
@@ -1080,7 +1093,7 @@ document.getElementById('btn-start').addEventListener('click', dismissSplash);
 function init() {
   renderKB();
   renderLessons();
-  setBellows(0.5);
+  setBellows(0.75);
   resizeCanvas();
   requestAnimationFrame(tick); // unified loop: decay + waveform
 }
