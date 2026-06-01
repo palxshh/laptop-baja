@@ -345,7 +345,8 @@
     <div class="grille"></div>
 
     <div id="bellows-row">
-      <span id="bellows-lbl">Screen angle</span>
+      <span id="bellows-lbl">Air</span>
+      <span id="sensor-status" style="font-size:.58rem;color:rgba(255,100,60,.7);letter-spacing:.5px;">sensor: waiting…</span>
       <div id="bellows-track"><div id="bellows-fill"></div></div>
       <span id="bellows-pct">70%</span>
     </div>
@@ -767,14 +768,26 @@ document.addEventListener('keyup', e => {
 
 // ── DEVICE ORIENTATION (LID ANGLE) ───────────────────────────────────────────
 function onOrientation(e) {
-  const b = e.beta; if (b === null) return;
-  // Position-based: lid angle directly sets bellows level
-  // Tight 50° range so small angle changes are dramatic
+  const b = e.beta;
+  // Live debug readout — shows whether sensor fires + actual angle
+  const ss = document.getElementById('sensor-status');
+  if (b === null) {
+    if (ss) ss.textContent = 'sensor: firing but β=null';
+    return;
+  }
+  if (ss) ss.textContent = `β ${Math.round(b)}° γ ${Math.round(e.gamma)}°`;
+  ss.style.color = 'rgba(100,220,100,.8)'; // green = working
+
   const raw   = Math.max(0, Math.min(1, (b - 45) / 50));
-  const level = raw * raw * (3 - 2 * raw); // smoothstep curve
+  const level = raw * raw * (3 - 2 * raw);
   const vel   = prevBeta !== null ? Math.abs(b - prevBeta) * 6 : 0;
   prevBeta = b;
   setBellows(level, vel);
+}
+
+function onOrientationError() {
+  const ss = document.getElementById('sensor-status');
+  if (ss) { ss.textContent = 'sensor: not available'; ss.style.color = 'rgba(255,80,60,.7)'; }
 }
 
 function tryMotion() {
@@ -1027,10 +1040,18 @@ function dismissSplash() {
       typeof DeviceOrientationEvent.requestPermission === 'function') {
     DeviceOrientationEvent.requestPermission()
       .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', onOrientation); })
-      .catch(() => {});
+      .catch(onOrientationError);
   } else {
     tryMotion();
   }
+  // If no events in 3s, tell the user clearly
+  setTimeout(() => {
+    const ss = document.getElementById('sensor-status');
+    if (ss && ss.textContent === 'sensor: waiting…') {
+      ss.textContent = 'sensor: not detected — drag bar manually';
+      ss.style.color = 'rgba(255,150,60,.7)';
+    }
+  }, 3000);
 
 }
 
