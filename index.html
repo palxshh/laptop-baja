@@ -980,7 +980,7 @@ window.addEventListener('resize', resizeCanvas);
 function dismissSplash() {
   const splash = document.getElementById('splash');
   splash.classList.add('hide');
-  setTimeout(() => splash.remove(), 500);
+  setTimeout(() => { splash.remove(); resizeCanvas(); }, 500);
 
   // First interaction: init audio + try motion
   initAudio();
