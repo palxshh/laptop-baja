@@ -798,12 +798,7 @@ document.getElementById('lclose').addEventListener('click', () =>
 
 document.getElementById('lb-stop').addEventListener('click', stopLesson);
 
-document.getElementById('btn-motion').addEventListener('click', () => {
-  document.getElementById('motionbox').classList.remove('show');
-  tryMotion();
-});
-document.getElementById('btn-skip').addEventListener('click', () =>
-  document.getElementById('motionbox').classList.remove('show'));
+// (motion permission is now handled inside dismissSplash)
 
 // ── LESSONS ───────────────────────────────────────────────────────────────────
 function noteShort(id) {
