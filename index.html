@@ -97,20 +97,25 @@
       box-shadow: inset 0 0 30px rgba(0,0,0,.6), 0 2px 8px rgba(0,0,0,.4);
     }
 
-    /* ── NOTE DISPLAY ───────────────────────────────────────── */
+    /* ── NOTE DISPLAY + WAVEFORM ───────────────────────────── */
     #notes-area {
-      min-height: 82px; padding: 8px 20px;
+      min-height: 120px; padding: 8px 20px;
       display: flex; align-items: center; justify-content: center; gap: 10px;
-      flex-wrap: wrap;
+      flex-wrap: wrap; position: relative;
+    }
+    #wave {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 0;
     }
     #idle-msg { color: rgba(184,134,11,.38); font-size: .8rem;
-      letter-spacing: 1px; font-style: italic; }
+      letter-spacing: 1px; font-style: italic; position: relative; z-index: 1; }
 
     .nbubble {
       display: flex; flex-direction: column; align-items: center;
-      background: rgba(0,0,0,.35); border: 1px solid rgba(184,134,11,.4);
+      background: rgba(0,0,0,.55); border: 1px solid rgba(184,134,11,.4);
       border-radius: 8px; padding: 5px 14px; min-width: 58px;
       opacity: 0; transform: scale(.75); transition: opacity .12s, transform .12s;
+      position: relative; z-index: 1;
     }
     .nbubble.vis { opacity: 1; transform: scale(1); }
     .nbubble .dev { font-family: 'Noto Serif Devanagari', serif;
@@ -322,6 +327,7 @@
     <div class="grille"></div>
 
     <div id="notes-area">
+      <canvas id="wave"></canvas>
       <span id="idle-msg">Press a key to play</span>
     </div>
 
@@ -476,7 +482,8 @@ let lessonStep = 0;
 let demoTimer  = null;
 
 // ── AUDIO ─────────────────────────────────────────────────────────────────────
-let ctx, masterGain, bwFilter, lfoOsc, lfoAmt;
+let ctx, masterGain, bwFilter, lfoOsc, lfoAmt, analyser;
+const waveBuffer = new Uint8Array(2048);
 
 function initAudio() {
   if (ctx) return;
@@ -514,6 +521,12 @@ function initAudio() {
   bwFilter.connect(masterGain);
   masterGain.connect(ctx.destination);
   rvGain.connect(ctx.destination);
+
+  // Analyser for waveform visualiser (taps off masterGain, no output needed)
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.82;
+  masterGain.connect(analyser);
 }
 
 function playNote(id) {
@@ -896,6 +909,73 @@ function stopLesson() {
 
 window.startLesson = startLesson;
 
+// ── WAVEFORM VISUALISER ───────────────────────────────────────────────────────
+function resizeCanvas() {
+  const canvas = document.getElementById('wave');
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const dpr  = window.devicePixelRatio || 1;
+  canvas.width  = rect.width  * dpr;
+  canvas.height = rect.height * dpr;
+}
+
+function drawPath(c2d, pts, W, H) {
+  c2d.beginPath();
+  pts.forEach(([x, y], i) => i === 0 ? c2d.moveTo(x, y) : c2d.lineTo(x, y));
+  c2d.stroke();
+}
+
+function drawWave() {
+  requestAnimationFrame(drawWave);
+  const canvas = document.getElementById('wave');
+  if (!canvas) return;
+  const c2d = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const dpr = window.devicePixelRatio || 1;
+  const hasNotes = Object.keys(playing).length > 0;
+
+  c2d.clearRect(0, 0, W, H);
+
+  // Build point array
+  const pts = [];
+  if (analyser && hasNotes) {
+    // Real audio waveform from AnalyserNode
+    analyser.getByteTimeDomainData(waveBuffer);
+    const step = Math.max(1, Math.floor(waveBuffer.length / W));
+    for (let x = 0; x < W; x++) {
+      const v = (waveBuffer[x * step] / 128.0) - 1.0; // -1 to +1
+      pts.push([x, H / 2 + v * H * 0.42]);
+    }
+  } else {
+    // Animated sine — amplitude tied to bellows so it reacts to lid movement
+    const t   = Date.now() / 900;
+    const amp = bellows * H * 0.38;
+    const freq = 1.8 + bellows * 2.5;
+    for (let x = 0; x <= W; x++) {
+      const y = H / 2 + amp * Math.sin(freq * Math.PI * 2 * (x / W) + t);
+      pts.push([x, y]);
+    }
+  }
+
+  // Glow pass (thick, transparent)
+  const alpha = 0.18 + bellows * 0.55;
+  c2d.lineWidth  = 8 * dpr;
+  c2d.strokeStyle = `rgba(255,170,40,${(alpha * 0.35).toFixed(2)})`;
+  c2d.shadowBlur  = 0;
+  drawPath(c2d, pts, W, H);
+
+  // Core line (sharp, bright)
+  c2d.lineWidth   = 2 * dpr;
+  c2d.strokeStyle = `rgba(255,200,80,${alpha.toFixed(2)})`;
+  c2d.shadowBlur  = (10 + bellows * 30) * dpr;
+  c2d.shadowColor = 'rgba(255,150,20,0.9)';
+  drawPath(c2d, pts, W, H);
+
+  c2d.shadowBlur = 0; // reset so it doesn't bleed elsewhere
+}
+
+window.addEventListener('resize', resizeCanvas);
+
 // ── SPLASH / INIT ─────────────────────────────────────────────────────────────
 function dismissSplash() {
   const splash = document.getElementById('splash');
@@ -921,6 +1001,8 @@ function init() {
   renderKB();
   renderLessons();
   setBellows(0.7);
+  resizeCanvas();
+  drawWave(); // start the animation loop
 }
 
 init();
