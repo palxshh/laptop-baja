@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>हारमोनियम — Harmonium</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Noto+Serif+Devanagari:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --wood-dark:    #180b04;
+      --wood-mid:     #2c1810;
+      --wood-light:   #4a2810;
+      --wood-grain:   #3a2008;
+      --gold:         #b8860b;
+      --gold-light:   #daa520;
+      --gold-bright:  #ffd700;
+      --ivory:        #f5f0e8;
+      --ivory-shadow: #c8b890;
+      --ebony:        #1c1007;
+      --amber:        #ffb347;
+      --teal:         #00ced1;
+      --bg:           #0e0704;
+    }
+
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: #fff;
+      font-family: 'DM Sans', sans-serif; }
+
+    #app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* ── HARMONIUM BODY ─────────────────────────────────────── */
+    #body {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column;
+      position: relative; overflow: hidden;
+      background:
+        repeating-linear-gradient(91deg,
+          transparent 0, transparent 26px,
+          rgba(0,0,0,.14) 26px, rgba(0,0,0,.14) 28px),
+        repeating-linear-gradient(179deg,
+          transparent 0, transparent 40px,
+          rgba(255,200,80,.03) 40px, rgba(255,200,80,.03) 42px),
+        linear-gradient(165deg,
+          var(--wood-light) 0%, var(--wood-mid) 20%,
+          var(--wood-dark)  45%, var(--wood-mid) 70%,
+          var(--wood-light) 100%);
+      border-bottom: 3px solid var(--gold);
+    }
+    /* Gold border L/R/top */
+    #body::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      border: 3px solid var(--gold);
+      border-bottom: none;
+      box-shadow: inset 0 0 60px rgba(0,0,0,.5);
+    }
+    /* Subtle sheen at top */
+    #body::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg,
+        transparent 5%, var(--gold-light) 30%, var(--gold-bright) 50%, var(--gold-light) 70%, transparent 95%);
+      pointer-events: none;
+    }
+
+    /* ── TOP BAR ────────────────────────────────────────────── */
+    #topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 22px; position: relative; z-index: 5;
+    }
+    #brand { font-family: 'Noto Serif Devanagari', serif; font-size: 1rem;
+      color: var(--gold-light); letter-spacing: 3px; opacity: .85; }
+
+    #controls { display: flex; gap: 7px; }
+    .cbtn {
+      background: rgba(184,134,11,.15); border: 1px solid rgba(184,134,11,.5);
+      color: var(--gold-light); font-family: inherit; font-size: .72rem; font-weight: 500;
+      padding: 5px 13px; border-radius: 20px; cursor: pointer;
+      transition: background .2s, color .2s, border-color .2s; letter-spacing: .4px;
+      white-space: nowrap;
+    }
+    .cbtn:hover { background: rgba(184,134,11,.35); color: var(--gold-bright); }
+    .cbtn.on  { background: rgba(184,134,11,.4); color: var(--gold-bright);
+                border-color: var(--gold-bright); }
+
+    /* ── GRILLE ─────────────────────────────────────────────── */
+    .grille {
+      flex: 1; min-height: 0; margin: 0 22px;
+      border: 2px solid var(--gold); border-radius: 4px;
+      background:
+        repeating-linear-gradient(0deg,
+          rgba(0,0,0,.7) 0, rgba(0,0,0,.7) 3px,
+          rgba(60,30,5,.35) 3px, rgba(60,30,5,.35) 12px),
+        repeating-linear-gradient(90deg,
+          rgba(0,0,0,.5) 0, rgba(0,0,0,.5) 3px,
+          rgba(60,30,5,.2) 3px, rgba(60,30,5,.2) 12px);
+      box-shadow: inset 0 0 30px rgba(0,0,0,.6), 0 2px 8px rgba(0,0,0,.4);
+    }
+
+    /* ── NOTE DISPLAY ───────────────────────────────────────── */
+    #notes-area {
+      min-height: 82px; padding: 8px 20px;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      flex-wrap: wrap;
+    }
+    #idle-msg { color: rgba(184,134,11,.38); font-size: .8rem;
+      letter-spacing: 1px; font-style: italic; }
+
+    .nbubble {
+      display: flex; flex-direction: column; align-items: center;
+      background: rgba(0,0,0,.35); border: 1px solid rgba(184,134,11,.4);
+      border-radius: 8px; padding: 5px 14px; min-width: 58px;
+      opacity: 0; transform: scale(.75); transition: opacity .12s, transform .12s;
+    }
+    .nbubble.vis { opacity: 1; transform: scale(1); }
+    .nbubble .dev { font-family: 'Noto Serif Devanagari', serif;
+      font-size: 1.5rem; color: var(--gold-bright); line-height: 1.1; }
+    .nbubble .rom { font-size: .65rem; color: var(--gold-light); opacity: .8; margin-top: 2px; }
+
+    /* ── BELLOWS BAR ────────────────────────────────────────── */
+    #bellows-row {
+      padding: 5px 22px 12px;
+      display: flex; align-items: center; gap: 9px;
+    }
+    #bellows-lbl { font-size: .6rem; color: rgba(184,134,11,.55); letter-spacing: 1.2px;
+      text-transform: uppercase; white-space: nowrap; }
+    #bellows-track {
+      flex: 1; height: 7px; background: rgba(0,0,0,.45);
+      border: 1px solid rgba(184,134,11,.28); border-radius: 4px;
+      overflow: hidden; cursor: ew-resize; position: relative;
+    }
+    #bellows-fill {
+      height: 100%; width: 70%;
+      background: linear-gradient(90deg, var(--gold), var(--gold-bright));
+      border-radius: 4px; transition: width .08s;
+    }
+    #bellows-pct { font-size: .6rem; color: rgba(184,134,11,.45); width: 30px; text-align: right; }
+
+    /* ── KEYBOARD ───────────────────────────────────────────── */
+    #kb-wrap {
+      height: 40vh; min-height: 150px;
+      background: var(--wood-dark); border-top: 3px solid var(--gold);
+      position: relative; padding: 14px 8px 6px;
+    }
+    #kb { position: relative; height: 100%; }
+
+    .wkey {
+      position: absolute; bottom: 0; height: 100%;
+      background: linear-gradient(180deg, #ddd8c8 0%, var(--ivory) 25%, #faf6ef 100%);
+      border: 1px solid rgba(0,0,0,.45); border-radius: 0 0 7px 7px; border-top: none;
+      cursor: pointer; user-select: none;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: flex-end; padding-bottom: 9px; gap: 2px;
+      box-shadow: 2px 3px 7px rgba(0,0,0,.45), inset 0 -2px 4px rgba(0,0,0,.1);
+      transition: background .05s, transform .05s, box-shadow .05s;
+    }
+    .wkey:hover { background: linear-gradient(180deg, #e8e0d0 0%, #f0e8d8 25%, #fdf9f3 100%); }
+    .wkey.pressed {
+      background: linear-gradient(180deg, #c09040 0%, #e8c870 30%, #f0dc90 100%);
+      transform: translateY(2px);
+      box-shadow: 0 0 18px rgba(255,179,71,.65), 1px 1px 4px rgba(0,0,0,.4);
+    }
+    .wkey.guide {
+      background: linear-gradient(180deg, #005f6a 0%, #00b5bd 30%, #00d8e0 100%);
+      box-shadow: 0 0 22px rgba(0,206,209,.7);
+    }
+    .wkey.dim { opacity: .35; cursor: default; pointer-events: none; }
+
+    .bkey {
+      position: absolute; top: 0; height: 62%;
+      background: linear-gradient(180deg, #2a1508 0%, #1a0c04 60%, #120800 100%);
+      border: 1px solid rgba(0,0,0,.7); border-radius: 0 0 5px 5px; border-top: none;
+      cursor: pointer; user-select: none; z-index: 2;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: flex-end; padding-bottom: 7px;
+      box-shadow: 2px 4px 10px rgba(0,0,0,.65), inset 0 -2px 4px rgba(0,0,0,.35);
+      transition: background .05s, transform .05s, box-shadow .05s;
+    }
+    .bkey:hover { background: linear-gradient(180deg, #3a2010 0%, #2a1408 100%); }
+    .bkey.pressed {
+      background: linear-gradient(180deg, #5a3010 0%, #3a1c06 100%);
+      transform: translateY(1px);
+      box-shadow: 0 0 14px rgba(255,179,71,.5), 1px 2px 6px rgba(0,0,0,.5);
+    }
+    .bkey.guide {
+      background: linear-gradient(180deg, #003a42 0%, #006870 100%);
+      box-shadow: 0 0 18px rgba(0,206,209,.7);
+    }
+    .bkey.dim { opacity: .22; cursor: default; pointer-events: none; }
+
+    .klbl { font-size: .52rem; letter-spacing: .4px; line-height: 1; opacity: .65; }
+    .wkey .klbl { color: #5a4030; }
+    .bkey .klbl { color: #c09060; }
+    .nlbl { font-size: .58rem; font-weight: 500; opacity: .45; line-height: 1; }
+    .wkey .nlbl { color: #6a5040; }
+    .bkey .nlbl { color: #a07050; font-size: .5rem; }
+
+    /* ── LESSON STATUS BAR ──────────────────────────────────── */
+    #lesson-bar {
+      display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 60;
+      align-items: center; gap: 12px; padding: 7px 16px;
+      background: rgba(0,60,64,.85); border-bottom: 2px solid var(--teal);
+      backdrop-filter: blur(4px);
+    }
+    #lesson-bar.on { display: flex; }
+    #lb-title { font-size: .72rem; color: var(--teal); flex: 1; }
+    #lb-prog { width: 100px; height: 4px; background: rgba(0,206,209,.2);
+      border-radius: 2px; overflow: hidden; }
+    #lb-fill { height: 100%; background: var(--teal); transition: width .25s; }
+    #lb-stop { font-size: .68rem; color: rgba(0,206,209,.7); background: none;
+      border: 1px solid rgba(0,206,209,.35); border-radius: 3px;
+      padding: 2px 9px; cursor: pointer; font-family: inherit; }
+
+    /* ── LESSONS PANEL ──────────────────────────────────────── */
+    #lpanel {
+      position: fixed; top: 0; right: -420px; bottom: 0;
+      width: min(400px, 90vw); overflow-y: auto; z-index: 80;
+      background: linear-gradient(180deg, #140a04, #0a0400);
+      border-left: 2px solid var(--gold);
+      transition: right .32s cubic-bezier(.4,0,.2,1);
+      padding: 18px 16px;
+    }
+    #lpanel.open { right: 0; }
+    #lpanel h2 { color: var(--gold-light); font-size: .9rem; letter-spacing: 2px;
+      margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid rgba(184,134,11,.25);
+      display: flex; align-items: center; justify-content: space-between; }
+    #lclose { background: none; border: none; color: var(--gold-light);
+      cursor: pointer; font-size: 1.1rem; opacity: .6; }
+
+    .lcard { background: rgba(255,255,255,.035); border: 1px solid rgba(184,134,11,.18);
+      border-radius: 8px; padding: 11px 12px; margin-bottom: 9px; cursor: default; }
+    .lcard:hover { background: rgba(184,134,11,.06); border-color: rgba(184,134,11,.4); }
+    .lc-title { color: var(--gold-light); font-size: .82rem; font-weight: 600; }
+    .lc-sub { color: rgba(218,165,32,.65); font-size: .67rem; margin-top: 1px; }
+    .lc-desc { color: rgba(255,255,255,.45); font-size: .68rem; line-height: 1.45;
+      margin-top: 5px; }
+    .lc-mood { font-size: .62rem; color: rgba(184,134,11,.55); margin-top: 4px; }
+    .lc-seq { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 7px; }
+    .lc-n { background: rgba(184,134,11,.12); border: 1px solid rgba(184,134,11,.28);
+      color: var(--gold-light); font-size: .58rem; padding: 2px 7px; border-radius: 10px; }
+    .lc-acts { display: flex; gap: 7px; margin-top: 9px; }
+    .lbtn { flex: 1; padding: 6px 4px; border: 1px solid var(--gold);
+      background: transparent; color: var(--gold-light); font-size: .68rem;
+      border-radius: 4px; cursor: pointer; font-family: inherit; transition: background .15s; }
+    .lbtn:hover { background: rgba(184,134,11,.18); }
+    .lbtn.pri { background: rgba(184,134,11,.18); }
+
+    /* ── CELEBRATION ────────────────────────────────────────── */
+    @keyframes cel {
+      0%   { opacity: 0; transform: translate(-50%,-50%) scale(.4); }
+      40%  { opacity: 1; transform: translate(-50%,-60%) scale(1.15); }
+      75%  { opacity: 1; transform: translate(-50%,-55%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%,-80%) scale(.8); }
+    }
+    #cel { position: fixed; top: 50%; left: 50%; font-size: 3.5rem;
+      z-index: 200; pointer-events: none; display: none; }
+    #cel.go { display: block; animation: cel 1.6s ease forwards; }
+
+    /* ── MOTION OVERLAY ─────────────────────────────────────── */
+    #motionbox {
+      display: none; position: fixed; inset: 0; z-index: 150;
+      background: rgba(0,0,0,.78); align-items: center; justify-content: center;
+    }
+    #motionbox.show { display: flex; }
+    #motioncard { background: var(--wood-mid); border: 2px solid var(--gold);
+      border-radius: 12px; padding: 28px 24px; text-align: center; max-width: 300px; }
+    #motioncard h3 { color: var(--gold-bright); margin-bottom: 8px; font-size: 1rem; }
+    #motioncard p { color: rgba(255,255,255,.65); font-size: .82rem;
+      line-height: 1.55; margin-bottom: 18px; }
+    #btn-motion { background: rgba(184,134,11,.3); border: 1px solid var(--gold);
+      color: var(--gold-bright); padding: 9px 22px; border-radius: 20px;
+      cursor: pointer; font-family: inherit; font-size: .88rem; margin-right: 10px; }
+    #btn-skip  { background: none; border: none; color: rgba(255,255,255,.35);
+      cursor: pointer; font-size: .78rem; font-family: inherit; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Lesson progress bar (top, fixed) -->
+  <div id="lesson-bar">
+    <span id="lb-title">—</span>
+    <div id="lb-prog"><div id="lb-fill" style="width:0%"></div></div>
+    <button id="lb-stop">✕ Stop</button>
+  </div>
+
+  <!-- Harmonium body -->
+  <div id="body">
+    <div id="topbar">
+      <span id="brand">हारमोनियम</span>
+      <div id="controls">
+        <button class="cbtn" id="btn-flip">⇄ Flip</button>
+        <button class="cbtn" id="btn-nota">सा ↔ C</button>
+        <button class="cbtn" id="btn-lessons">♪ Lessons</button>
+      </div>
+    </div>
+
+    <div class="grille"></div>
+
+    <div id="notes-area">
+      <span id="idle-msg">Press a key to play</span>
+    </div>
+
+    <div class="grille"></div>
+
+    <div id="bellows-row">
+      <span id="bellows-lbl">Bellows</span>
+      <div id="bellows-track"><div id="bellows-fill"></div></div>
+      <span id="bellows-pct">70%</span>
+    </div>
+  </div>
+
+  <!-- Keyboard -->
+  <div id="kb-wrap"><div id="kb"></div></div>
+
+  <!-- Lessons side panel -->
+  <div id="lpanel">
+    <h2><span>♪ Lessons</span><button id="lclose">✕</button></h2>
+    <div id="llist"></div>
+  </div>
+
+  <!-- Celebration -->
+  <div id="cel">🎉</div>
+
+  <!-- Motion permission prompt (iOS) -->
+  <div id="motionbox">
+    <div id="motioncard">
+      <h3>🎵 Enable Lid Control</h3>
+      <p>Tilt your laptop screen open and closed to work the harmonium bellows — just like a real one!</p>
+      <button id="btn-motion">Enable Motion</button>
+      <button id="btn-skip">Skip</button>
+    </div>
+  </div>
+
+</div>
+<script>
+'use strict';
+
+// ── NOTE DATA ─────────────────────────────────────────────────────────────────
+const NOTES = {
+  'G3':  { freq: 196.00, indian: 'Pa',        dev: 'प',     short: 'Pa'        },
+  'G#3': { freq: 207.65, indian: 'Komal Dha', dev: 'क॒ध',   short: 'k.Dha'    },
+  'A3':  { freq: 220.00, indian: 'Dha',       dev: 'ध',     short: 'Dha'       },
+  'A#3': { freq: 233.08, indian: 'Komal Ni',  dev: 'क॒नि',  short: 'k.Ni'     },
+  'B3':  { freq: 246.94, indian: 'Ni',        dev: 'नि',    short: 'Ni'        },
+  'C4':  { freq: 261.63, indian: 'Sa',        dev: 'सा',    short: 'Sa'        },
+  'C#4': { freq: 277.18, indian: 'Komal Re',  dev: 'क॒रे',  short: 'k.Re'     },
+  'D4':  { freq: 293.66, indian: 'Re',        dev: 'रे',    short: 'Re'        },
+  'D#4': { freq: 311.13, indian: 'Komal Ga',  dev: 'क॒ग',   short: 'k.Ga'     },
+  'E4':  { freq: 329.63, indian: 'Ga',        dev: 'ग',     short: 'Ga'        },
+  'F4':  { freq: 349.23, indian: 'Ma',        dev: 'म',     short: 'Ma'        },
+  'F#4': { freq: 369.99, indian: 'Tivra Ma',  dev: 'ती॒म',  short: 'T.Ma'     },
+  'G4':  { freq: 392.00, indian: 'Pa',        dev: 'प',     short: 'Pa'        },
+  'G#4': { freq: 415.30, indian: 'Komal Dha', dev: 'क॒ध',   short: 'k.Dha'    },
+  'A4':  { freq: 440.00, indian: 'Dha',       dev: 'ध',     short: 'Dha'       },
+  'A#4': { freq: 466.16, indian: 'Komal Ni',  dev: 'क॒नि',  short: 'k.Ni'     },
+  'B4':  { freq: 493.88, indian: 'Ni',        dev: 'नि',    short: 'Ni'        },
+  'C5':  { freq: 523.25, indian: "Sa'",       dev: "सा'",   short: "Sa'"       },
+};
+
+// visual key order
+const WHITE_IDS = ['G3','A3','B3','C4','D4','E4','F4','G4','A4','B4','C5'];
+const BLACK_IDS = ['G#3','A#3','C#4','D#4','F#4','G#4','A#4'];
+// black key sits AFTER this white key index (0-based)
+const B_AFTER  = { 'G#3':0, 'A#3':1, 'C#4':3, 'D#4':4, 'F#4':6, 'G#4':7, 'A#4':8 };
+
+// ── KEY MAPS ──────────────────────────────────────────────────────────────────
+// Right-hand: upper row = black, home row = white, bottom-right = low octave
+const R_MAP = {
+  'n':'G3', 'm':'A3', ',':'B3',
+  'h':'C4', 'y':'C#4', 'j':'D4', 'u':'D#4', 'k':'E4',
+  'l':'F4', 'i':'F#4', ';':'G4', 'o':'G#4', "'":"A4",
+  'p':'A#4', '\\':'B4', ']':'C5',
+};
+// Left-hand mirror: home row = white, upper-left = black, z-row = low octave
+const L_MAP = {
+  'z':'G3', 'x':'A3', 'c':'B3',
+  'a':'C4', 'q':'C#4', 's':'D4', 'w':'D#4', 'd':'E4',
+  'f':'F4', 'e':'F#4', 'g':'G4', 'r':'G#4', 'h':'A4',
+  't':'A#4', 'j':'B4', 'k':'C5',
+};
+
+// ── LESSONS ───────────────────────────────────────────────────────────────────
+const LESSONS = [
+  { id:1, title:'Sa Re Ga Ma Pa Dha Ni Sa', sub:'The Complete Scale',
+    desc:'The foundation of all Indian classical music — ascend from Sa to the upper Sa, then come back down.',
+    mood:'🌅 Morning practice',
+    seq:['C4','D4','E4','F4','G4','A4','B4','C5','B4','A4','G4','F4','E4','D4','C4'], tempo:580 },
+  { id:2, title:'Sa – Pa – Sa', sub:'The Drone Fifth',
+    desc:'Sa and Pa are the two pillars of Indian music. This perfect fifth sounds complete by itself.',
+    mood:'🎯 Foundation', seq:['C4','G4','C5','G4','C4'], tempo:700 },
+  { id:3, title:'Twinkle Twinkle Little Star', sub:'Your First Melody',
+    desc:'Sa Sa Pa Pa Dha Dha Pa — a familiar tune to get comfortable with the note positions.',
+    mood:'⭐ Beginner-friendly',
+    seq:['C4','C4','G4','G4','A4','A4','G4','F4','F4','E4','E4','D4','D4','C4'], tempo:480 },
+  { id:4, title:'Raag Yaman — Aroha', sub:'Evening Raga',
+    desc:'Uses Tivra Ma (F#). Bright and uplifting — the sharp Ma is the defining note of this raga.',
+    mood:'🌆 Evening — 6pm to 9pm',
+    seq:['C4','D4','E4','F#4','G4','A4','B4','C5'], tempo:560 },
+  { id:5, title:'Raag Bhairav — Opening', sub:'Dawn Raga',
+    desc:'Uses Komal Re (C#) and Komal Dha (G#). Profoundly meditative — traditionally sung at sunrise.',
+    mood:'🌄 Dawn — 6am to 9am',
+    seq:['C4','C#4','E4','F4','G4','G#4','B4','C5'], tempo:660 },
+  { id:6, title:'Vande Mataram', sub:'National Song of India',
+    desc:'The opening phrases of India\'s national song. Recognised by every Indian ear.',
+    mood:'🇮🇳 Patriotic',
+    seq:['G4','G4','G4','E4','D4','C4','D4','E4','G4','E4','C4'], tempo:490 },
+  { id:7, title:'Jana Gana Mana', sub:'National Anthem',
+    desc:'Opening line of the national anthem. Solemn and grand.',
+    mood:'🇮🇳 National Anthem',
+    seq:['C4','C4','C4','E4','G4','G4','E4','F4','E4','D4','C4'], tempo:520 },
+  { id:8, title:'Raag Bhupali', sub:'Pentatonic — Only 5 Notes!',
+    desc:'Only Sa Re Ga Pa Dha — just 5 notes but sounds complete and deeply peaceful.',
+    mood:'🌸 Peaceful, any time of day',
+    seq:['C4','D4','E4','G4','A4','C5','A4','G4','E4','D4','C4'], tempo:550 },
+];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let useWestern = false;
+let useLeft    = false;
+let bellows    = 0.7;
+let prevBeta   = null;
+
+const playing = {};           // noteId → { oscs, gainNode }
+const heldKeys = new Set();   // currently depressed keyboard keys
+
+let lessonMode = null;        // null | 'demo' | 'practice'
+let lessonData = null;
+let lessonStep = 0;
+let demoTimer  = null;
+
+// ── AUDIO ─────────────────────────────────────────────────────────────────────
+let ctx, masterGain, bwFilter, lfoOsc, lfoAmt;
+
+function initAudio() {
+  if (ctx) return;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+  bwFilter = ctx.createBiquadFilter();
+  bwFilter.type = 'lowpass';
+  bwFilter.frequency.value = 800 + bellows * 2200;
+  bwFilter.Q.value = 0.8;
+
+  masterGain = ctx.createGain();
+  masterGain.gain.value = bellows * 0.75;
+
+  // LFO (tremolo from lid movement)
+  lfoOsc = ctx.createOscillator();
+  lfoOsc.type = 'sine';
+  lfoOsc.frequency.value = 4;
+  lfoAmt = ctx.createGain();
+  lfoAmt.gain.value = 0;
+  lfoOsc.connect(lfoAmt);
+  lfoAmt.connect(masterGain.gain);
+  lfoOsc.start();
+
+  // Simple reverb: two comb delay loops
+  const rvGain = ctx.createGain();
+  rvGain.gain.value = 0.16;
+  [0.028, 0.067].forEach(t => {
+    const d = ctx.createDelay(0.15); d.delayTime.value = t;
+    const fb = ctx.createGain(); fb.gain.value = 0.38;
+    d.connect(fb); fb.connect(d);
+    bwFilter.connect(d);
+    d.connect(rvGain);
+  });
+
+  bwFilter.connect(masterGain);
+  masterGain.connect(ctx.destination);
+  rvGain.connect(ctx.destination);
+}
+
+function playNote(id) {
+  if (playing[id]) return;
+  initAudio();
+  if (ctx.state === 'suspended') ctx.resume();
+  const nd = NOTES[id]; if (!nd) return;
+  const f = nd.freq;
+
+  // 7 oscillators: harmonics 1-5 + 2 chorus reeds
+  const defs = [
+    { m:1, g:1.00, d:   0 }, { m:2, g:0.52, d:  +3 },
+    { m:3, g:0.28, d:  -2 }, { m:4, g:0.16, d:   0 },
+    { m:5, g:0.08, d:  +2 }, { m:1, g:0.36, d: +14 },
+    { m:1, g:0.36, d: -14 },
+  ];
+
+  const ng = ctx.createGain();
+  ng.gain.setValueAtTime(0, ctx.currentTime);
+  ng.gain.linearRampToValueAtTime(0.11, ctx.currentTime + 0.04);
+  ng.connect(bwFilter);
+
+  const oscs = defs.map(({ m, g, d }) => {
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.value = f * m; o.detune.value = d;
+    const og = ctx.createGain(); og.gain.value = g;
+    o.connect(og); og.connect(ng); o.start();
+    return o;
+  });
+
+  playing[id] = { oscs, ng };
+}
+
+function stopNote(id) {
+  const n = playing[id]; if (!n) return;
+  const t = ctx.currentTime;
+  n.ng.gain.cancelScheduledValues(t);
+  n.ng.gain.setValueAtTime(n.ng.gain.value, t);
+  n.ng.gain.linearRampToValueAtTime(0, t + 0.22);
+  const cap = n;
+  setTimeout(() => { cap.oscs.forEach(o => { try { o.stop(); } catch(e){} }); cap.ng.disconnect(); }, 260);
+  delete playing[id];
+}
+
+function stopAll() { Object.keys(playing).forEach(stopNote); }
+
+function setBellows(level, vel = 0) {
+  bellows = Math.max(0, Math.min(1, level));
+  if (ctx) {
+    const t = ctx.currentTime;
+    masterGain.gain.setTargetAtTime(bellows * 0.75, t, 0.06);
+    bwFilter.frequency.setTargetAtTime(800 + bellows * 2200, t, 0.06);
+    lfoOsc.frequency.setTargetAtTime(Math.min(2 + vel * 0.35, 9), t, 0.08);
+    lfoAmt.gain.setTargetAtTime(Math.min(vel * 0.012, 0.05), t, 0.08);
+  }
+  const pct = Math.round(bellows * 100);
+  document.getElementById('bellows-fill').style.width = pct + '%';
+  document.getElementById('bellows-pct').textContent  = pct + '%';
+}
+
+// ── KEYBOARD RENDERING ────────────────────────────────────────────────────────
+function keyLabel(id) {
+  const map = useLeft ? L_MAP : R_MAP;
+  const entry = Object.entries(map).find(([,v]) => v === id);
+  if (!entry) return null;
+  const k = entry[0];
+  const pretty = { "'":"'", '\\':'\\', ',':',', '.':'.', ';':';', ']':']' };
+  return pretty[k] ?? k.toUpperCase();
+}
+
+function noteDisplay(id) {
+  const n = NOTES[id];
+  if (useWestern) return { pri: id, sec: n.indian };
+  return { pri: n.dev, sec: n.short };
+}
+
+function renderKB() {
+  const kb = document.getElementById('kb');
+  kb.innerHTML = '';
+  const nw = WHITE_IDS.length;          // 11 white keys
+  const wPct = 100 / nw;
+  const bPct = wPct * 0.62;
+
+  WHITE_IDS.forEach((id, i) => {
+    const lbl = keyLabel(id);
+    const mapped = lbl !== null;
+    const { pri, sec } = noteDisplay(id);
+
+    const el = document.createElement('div');
+    el.className = 'wkey' + (mapped ? '' : ' dim');
+    el.id = 'k-' + id;
+    el.dataset.note = id;
+    el.style.left  = (i * wPct) + '%';
+    el.style.width = wPct + '%';
+    if (mapped) {
+      el.innerHTML = `<span class="nlbl">${sec}</span><span class="klbl">${lbl}</span>`;
+    }
+    addMouseTouch(el, id);
+    kb.appendChild(el);
+  });
+
+  BLACK_IDS.forEach(id => {
+    const ai = B_AFTER[id]; if (ai === undefined) return;
+    const lbl = keyLabel(id);
+    const mapped = lbl !== null;
+
+    const el = document.createElement('div');
+    el.className = 'bkey' + (mapped ? '' : ' dim');
+    el.id = 'k-' + id;
+    el.dataset.note = id;
+    el.style.left  = ((ai + 1) * wPct - bPct / 2) + '%';
+    el.style.width = bPct + '%';
+    if (mapped) el.innerHTML = `<span class="klbl">${lbl}</span>`;
+    addMouseTouch(el, id);
+    kb.appendChild(el);
+  });
+}
+
+function addMouseTouch(el, id) {
+  el.addEventListener('mousedown',  e => { e.preventDefault(); noteOn(id); });
+  el.addEventListener('mouseup',    () => noteOff(id));
+  el.addEventListener('mouseleave', () => noteOff(id));
+  el.addEventListener('touchstart', e => { e.preventDefault(); noteOn(id); }, { passive: false });
+  el.addEventListener('touchend',   () => noteOff(id));
+}
+
+// ── NOTE ON/OFF ───────────────────────────────────────────────────────────────
+function noteOn(id) {
+  if (lessonMode === 'practice') { handlePractice(id); return; }
+  playNote(id);
+  setActive(id, true);
+  refreshDisplay();
+}
+
+function noteOff(id) {
+  if (lessonMode === 'practice') return;
+  stopNote(id);
+  setActive(id, false);
+  refreshDisplay();
+}
+
+function setActive(id, on) {
+  const el = document.getElementById('k-' + id);
+  if (el) el.classList.toggle('pressed', on);
+}
+
+function setGuide(id, on) {
+  const el = document.getElementById('k-' + id);
+  if (el) el.classList.toggle('guide', on);
+}
+
+// ── NOTE DISPLAY AREA ─────────────────────────────────────────────────────────
+function refreshDisplay() {
+  const area = document.getElementById('notes-area');
+  const idle = document.getElementById('idle-msg');
+  const ids  = Object.keys(playing);
+
+  if (ids.length === 0) {
+    area.querySelectorAll('.nbubble').forEach(b => {
+      b.classList.remove('vis');
+      setTimeout(() => b.remove(), 140);
+    });
+    idle.style.display = '';
+    return;
+  }
+  idle.style.display = 'none';
+
+  // Remove stale
+  area.querySelectorAll('.nbubble').forEach(b => {
+    if (!ids.includes(b.dataset.note)) {
+      b.classList.remove('vis');
+      setTimeout(() => b.remove(), 140);
+    }
+  });
+
+  // Add new
+  const existing = new Set([...area.querySelectorAll('.nbubble')].map(b => b.dataset.note));
+  ids.forEach(id => {
+    if (existing.has(id)) return;
+    const { pri, sec } = noteDisplay(id);
+    const b = document.createElement('div');
+    b.className = 'nbubble'; b.dataset.note = id;
+    b.innerHTML = `<span class="dev">${pri}</span><span class="rom">${sec}</span>`;
+    area.appendChild(b);
+    requestAnimationFrame(() => b.classList.add('vis'));
+  });
+}
+
+// ── KEYBOARD EVENTS ───────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+  const map = useLeft ? L_MAP : R_MAP;
+  const id  = map[e.key] ?? map[e.key.toLowerCase()];
+  if (!id || heldKeys.has(e.key)) return;
+  heldKeys.add(e.key);
+  noteOn(id);
+});
+
+document.addEventListener('keyup', e => {
+  const map = useLeft ? L_MAP : R_MAP;
+  const id  = map[e.key] ?? map[e.key.toLowerCase()];
+  heldKeys.delete(e.key);
+  if (id) noteOff(id);
+});
+
+// ── DEVICE ORIENTATION (LID ANGLE) ───────────────────────────────────────────
+function onOrientation(e) {
+  const b = e.beta; if (b === null) return;
+  // beta ≈ 0 when screen horizontal face-up; ~90 when vertical
+  // We treat ~20° as closed, ~120° as fully open
+  const level = Math.max(0, Math.min(1, (b - 15) / 105));
+  const vel   = prevBeta !== null ? Math.abs(b - prevBeta) * 4 : 0;
+  prevBeta = b;
+  setBellows(level, vel);
+}
+
+function tryMotion() {
+  if (typeof DeviceOrientationEvent === 'undefined') return;
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission()
+      .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', onOrientation); })
+      .catch(() => {});
+  } else {
+    window.addEventListener('deviceorientation', onOrientation);
+  }
+}
+
+// ── BELLOWS SLIDER ────────────────────────────────────────────────────────────
+(function () {
+  const track = document.getElementById('bellows-track');
+  let drag = false;
+  const getL = e => {
+    const r = track.getBoundingClientRect();
+    const x = (e.clientX ?? e.touches?.[0]?.clientX) ?? 0;
+    return Math.max(0, Math.min(1, (x - r.left) / r.width));
+  };
+  track.addEventListener('mousedown', e => { drag = true; setBellows(getL(e)); });
+  document.addEventListener('mousemove', e => { if (drag) setBellows(getL(e), 6); });
+  document.addEventListener('mouseup', () => { drag = false; });
+  track.addEventListener('touchstart', e => { drag = true; setBellows(getL(e)); }, { passive: true });
+  document.addEventListener('touchmove', e => { if (drag) setBellows(getL(e), 4); });
+  document.addEventListener('touchend', () => { drag = false; });
+})();
+
+// ── UI BUTTONS ────────────────────────────────────────────────────────────────
+document.getElementById('btn-flip').addEventListener('click', () => {
+  stopAll(); heldKeys.clear();
+  useLeft = !useLeft;
+  document.getElementById('btn-flip').classList.toggle('on', useLeft);
+  document.getElementById('btn-flip').textContent = useLeft ? '⇄ Right' : '⇄ Flip';
+  renderKB();
+});
+
+document.getElementById('btn-nota').addEventListener('click', () => {
+  useWestern = !useWestern;
+  document.getElementById('btn-nota').textContent = useWestern ? 'C ↔ सा' : 'सा ↔ C';
+  renderKB(); renderLessons(); refreshDisplay();
+});
+
+document.getElementById('btn-lessons').addEventListener('click', () =>
+  document.getElementById('lpanel').classList.toggle('open'));
+
+document.getElementById('lclose').addEventListener('click', () =>
+  document.getElementById('lpanel').classList.remove('open'));
+
+document.getElementById('lb-stop').addEventListener('click', stopLesson);
+
+document.getElementById('btn-motion').addEventListener('click', () => {
+  document.getElementById('motionbox').classList.remove('show');
+  tryMotion();
+});
+document.getElementById('btn-skip').addEventListener('click', () =>
+  document.getElementById('motionbox').classList.remove('show'));
+
+// ── LESSONS ───────────────────────────────────────────────────────────────────
+function noteShort(id) {
+  if (useWestern) return id;
+  return NOTES[id]?.short ?? id;
+}
+
+function renderLessons() {
+  document.getElementById('llist').innerHTML = LESSONS.map(l => `
+    <div class="lcard">
+      <div class="lc-title">${l.title}</div>
+      <div class="lc-sub">${l.sub}</div>
+      <div class="lc-desc">${l.desc}</div>
+      <div class="lc-mood">${l.mood}</div>
+      <div class="lc-seq">${l.seq.map(n => `<span class="lc-n">${noteShort(n)}</span>`).join('')}</div>
+      <div class="lc-acts">
+        <button class="lbtn"     onclick="startLesson(${l.id},'demo')">▶ Demo</button>
+        <button class="lbtn pri" onclick="startLesson(${l.id},'practice')">✦ Practice</button>
+      </div>
+    </div>`).join('');
+}
+
+function startLesson(id, mode) {
+  stopLesson();
+  const l = LESSONS.find(x => x.id === id); if (!l) return;
+  lessonData = l; lessonMode = mode; lessonStep = 0;
+  document.getElementById('lpanel').classList.remove('open');
+  document.getElementById('lesson-bar').classList.add('on');
+  document.getElementById('lb-title').textContent =
+    `${mode === 'demo' ? '▶ Demo:' : '✦ Practice:'} ${l.title}`;
+  updateProgress();
+  if (mode === 'demo') runDemo();
+  else setGuide(l.seq[0], true);
+}
+
+function updateProgress() {
+  if (!lessonData) return;
+  const pct = (lessonStep / lessonData.seq.length) * 100;
+  document.getElementById('lb-fill').style.width = pct + '%';
+}
+
+function runDemo() {
+  if (!lessonData || lessonMode !== 'demo') return;
+  if (lessonStep >= lessonData.seq.length) { finishLesson(); return; }
+  const id = lessonData.seq[lessonStep];
+  playNote(id); setActive(id, true); refreshDisplay(); updateProgress();
+  demoTimer = setTimeout(() => {
+    stopNote(id); setActive(id, false); refreshDisplay();
+    lessonStep++;
+    demoTimer = setTimeout(runDemo, 70);
+  }, lessonData.tempo - 70);
+}
+
+function handlePractice(id) {
+  if (!lessonData) return;
+  const expected = lessonData.seq[lessonStep];
+  if (id === expected) {
+    playNote(id); setActive(id, true); refreshDisplay();
+    setGuide(id, false);
+    setTimeout(() => { stopNote(id); setActive(id, false); refreshDisplay(); }, 380);
+    lessonStep++;
+    updateProgress();
+    if (lessonStep >= lessonData.seq.length) { setTimeout(finishLesson, 450); return; }
+    setGuide(lessonData.seq[lessonStep], true);
+  } else {
+    // Wrong key — brief red flash
+    const el = document.getElementById('k-' + id);
+    if (el) {
+      const old = el.style.cssText;
+      el.style.background = '#5a1010';
+      el.style.boxShadow  = '0 0 18px rgba(255,50,50,.55)';
+      setTimeout(() => { el.style.background = ''; el.style.boxShadow = ''; }, 280);
+    }
+  }
+}
+
+function finishLesson() {
+  const cel = document.getElementById('cel');
+  cel.classList.remove('go');
+  void cel.offsetWidth; // reflow to restart animation
+  cel.classList.add('go');
+  setTimeout(() => cel.classList.remove('go'), 1650);
+  stopLesson();
+}
+
+function stopLesson() {
+  if (demoTimer) clearTimeout(demoTimer); demoTimer = null;
+  stopAll();
+  document.querySelectorAll('.guide').forEach(el => el.classList.remove('guide'));
+  document.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
+  document.getElementById('lesson-bar').classList.remove('on');
+  lessonMode = null; lessonData = null; lessonStep = 0;
+  refreshDisplay();
+}
+
+window.startLesson = startLesson;
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+function init() {
+  renderKB();
+  renderLessons();
+  setBellows(0.7);
+
+  // Motion availability check
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    document.getElementById('motionbox').classList.add('show');
+  } else {
+    // Auto-try (Chrome desktop, Firefox, etc.)
+    tryMotion();
+  }
+}
+
+init();
+</script>
+</body>
+</html>
