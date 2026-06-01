@@ -330,7 +330,6 @@
       <span id="brand">हारमोनियम</span>
       <div id="controls">
         <button class="cbtn" id="btn-flip">⇄ Flip</button>
-        <button class="cbtn" id="btn-hold">Hold 🔓</button>
         <button class="cbtn" id="btn-nota">सा ↔ C</button>
         <button class="cbtn" id="btn-lessons">♪ Lessons</button>
       </div>
@@ -360,9 +359,6 @@
     <h2><span>♪ Lessons</span><button id="lclose">✕</button></h2>
     <div id="llist"></div>
   </div>
-
-  <!-- Pump hint tooltip -->
-  <div id="pump-hint">Lid still? Pump it to keep air — or press Hold 🔒</div>
 
   <!-- Celebration -->
   <div id="cel">🎉</div>
@@ -597,24 +593,9 @@ function setBellows(level, vel = 0) {
 
   if (ctx) {
     const t = ctx.currentTime;
-
-    // ── Pressure thresholds → audio character ──────────────────
-    let targetGain, targetFilter;
-    if (bellows < 0.08) {
-      targetGain   = 0;
-      targetFilter = 400;
-    } else if (bellows < 0.40) {
-      const z = (bellows - 0.08) / 0.32;       // 0→1 inside breathy zone
-      targetGain   = z * 0.35;                  // soft
-      targetFilter = 400 + z * 700;             // 400→1100 Hz (muffled)
-    } else {
-      const z = (bellows - 0.40) / 0.60;        // 0→1 inside full zone
-      targetGain   = 0.35 + z * 0.42;           // 0.35→0.77
-      targetFilter = 1100 + z * 2100;           // 1100→3200 Hz (bright)
-    }
-
-    masterGain.gain.setTargetAtTime(targetGain, t, 0.06);
-    bwFilter.frequency.setTargetAtTime(targetFilter, t, 0.06);
+    // Linear: full volume at full angle, muted at closed
+    masterGain.gain.setTargetAtTime(bellows * 0.75, t, 0.06);
+    bwFilter.frequency.setTargetAtTime(800 + bellows * 2200, t, 0.06);
     lfoOsc.frequency.setTargetAtTime(Math.min(2 + vel * 0.35, 9), t, 0.08);
     lfoAmt.gain.setTargetAtTime(Math.min(vel * 0.012, 0.05), t, 0.08);
   }
@@ -787,17 +768,13 @@ document.addEventListener('keyup', e => {
 // ── DEVICE ORIENTATION (LID ANGLE) ───────────────────────────────────────────
 function onOrientation(e) {
   const b = e.beta; if (b === null) return;
-  const delta = prevBeta !== null ? Math.abs(b - prevBeta) : 0;
+  // Position-based: lid angle directly sets bellows level
+  // Tight 50° range so small angle changes are dramatic
+  const raw   = Math.max(0, Math.min(1, (b - 45) / 50));
+  const level = raw * raw * (3 - 2 * raw); // smoothstep curve
+  const vel   = prevBeta !== null ? Math.abs(b - prevBeta) * 6 : 0;
   prevBeta = b;
-  if (holdMode) return;
-  // Pumping: lid movement adds pressure (position no longer matters, only motion)
-  const pump = delta * 0.018; // tuned: normal pumping fills 0→100% in ~3-4 swings
-  if (pump > 0.001) {
-    setBellows(Math.min(1, bellows + pump), delta * 4);
-    // Dismiss hint if user starts pumping
-    const hint = document.getElementById('pump-hint');
-    if (hint) hint.classList.remove('show');
-  }
+  setBellows(level, vel);
 }
 
 function tryMotion() {
@@ -835,13 +812,6 @@ document.getElementById('btn-flip').addEventListener('click', () => {
   document.getElementById('btn-flip').classList.toggle('on', useLeft);
   document.getElementById('btn-flip').textContent = useLeft ? '⇄ Right' : '⇄ Flip';
   renderKB();
-});
-
-document.getElementById('btn-hold').addEventListener('click', () => {
-  holdMode = !holdMode;
-  const btn = document.getElementById('btn-hold');
-  btn.textContent = holdMode ? 'Holding 🔒' : 'Hold 🔓';
-  btn.classList.toggle('on', holdMode);
 });
 
 document.getElementById('btn-nota').addEventListener('click', () => {
@@ -975,7 +945,12 @@ function drawWaveFrame() {
   const hasNotes = Object.keys(playing).length > 0;
 
   c2d.clearRect(0, 0, W, H);
-  if (bellows < 0.02) return; // nothing to show at near-zero pressure
+  if (bellows < 0.01) { // flat line at rock-bottom
+    c2d.strokeStyle = 'rgba(180,80,10,0.15)';
+    c2d.lineWidth = 1 * dpr;
+    c2d.beginPath(); c2d.moveTo(0, H/2); c2d.lineTo(W, H/2); c2d.stroke();
+    return;
+  }
 
   const pts = [];
 
@@ -1029,28 +1004,12 @@ function drawWaveFrame() {
   c2d.shadowBlur = 0;
 }
 
-// ── UNIFIED TICK LOOP (decay + waveform + hint) ───────────────────────────────
-function tick(ts) {
+// ── ANIMATION TICK ────────────────────────────────────────────────────────────
+function tick() {
   requestAnimationFrame(tick);
-
-  // Pressure decay: ~15%/sec when not pumping, not held, not sliding
-  if (!holdMode && !sliderDragging && bellows > 0) {
-    const dt = lastTick ? Math.min((ts - lastTick) / 1000, 0.1) : 0;
-    if (dt > 0) setBellows(Math.max(0, bellows - 0.15 * dt));
-  }
-  lastTick = ts;
-
-  // Hint: show once if a key is held but pressure is low and hold is off
-  if (!hintShown && !holdMode && heldKeys.size > 0 && bellows < 0.20) {
-    hintShown = true;
-    localStorage.setItem('pumpHint', '1');
-    const hint = document.getElementById('pump-hint');
-    if (hint) {
-      hint.classList.add('show');
-      setTimeout(() => hint.classList.remove('show'), 4000);
-    }
-  }
-
+  // Ensure canvas is sized before drawing (may have been 0 on init)
+  const canvas = document.getElementById('wave');
+  if (canvas && (!canvas.width || !canvas.height)) resizeCanvas();
   drawWaveFrame();
 }
 
@@ -1073,19 +1032,6 @@ function dismissSplash() {
     tryMotion();
   }
 
-  // If no lid sensor fires within 2.5s, auto-enable Hold so the app works normally
-  let sensorDetected = false;
-  const sensorCheck = () => { sensorDetected = true; };
-  window.addEventListener('deviceorientation', sensorCheck, { once: true });
-  setTimeout(() => {
-    window.removeEventListener('deviceorientation', sensorCheck);
-    if (!sensorDetected && !holdMode) {
-      holdMode = true;
-      setBellows(0.75); // restore full pressure
-      const btn = document.getElementById('btn-hold');
-      if (btn) { btn.textContent = 'Holding 🔒'; btn.classList.add('on'); }
-    }
-  }, 2500);
 }
 
 document.getElementById('btn-start').addEventListener('click', dismissSplash);
@@ -1093,7 +1039,7 @@ document.getElementById('btn-start').addEventListener('click', dismissSplash);
 function init() {
   renderKB();
   renderLessons();
-  setBellows(0.75);
+  setBellows(0.7);
   resizeCanvas();
   requestAnimationFrame(tick); // unified loop: decay + waveform
 }
